@@ -1,0 +1,522 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>연봉 실수령액·퇴직금 계산기</title>
+<style>
+:root{--bg:#ffffff;--fg:#222222;--muted:#666666;--line:#dddddd;--accent:#2563eb;--card:#f6f7f9;--err:#dc2626}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){--bg:#111111;--fg:#eeeeee;--muted:#aaaaaa;--line:#333333;--accent:#60a5fa;--card:#1c1c1e;--err:#f87171}
+}
+:root[data-theme="dark"]{--bg:#111111;--fg:#eeeeee;--muted:#aaaaaa;--line:#333333;--accent:#60a5fa;--card:#1c1c1e;--err:#f87171}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:system-ui,-apple-system,"Malgun Gothic",sans-serif;line-height:1.6}
+.wrap{max-width:640px;margin:0 auto;padding:16px}
+h1{font-size:1.5rem;margin:8px 0 4px}
+.desc{color:var(--muted);font-size:.9rem;margin:0 0 16px}
+.tabs{display:flex;gap:8px;margin-bottom:16px}
+.tab{flex:1;padding:10px;font-size:1rem;background:var(--card);color:var(--fg);border:1px solid var(--line);border-radius:8px;cursor:pointer}
+.tab.active{background:var(--accent);color:#ffffff;border-color:var(--accent)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:16px}
+label{display:block;font-size:.9rem;margin:12px 0 4px}
+input,select{width:100%;box-sizing:border-box;padding:10px;font-size:1rem;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--fg)}
+button.calc{width:100%;padding:12px;font-size:1rem;background:var(--accent);color:#ffffff;border:0;border-radius:6px;cursor:pointer;margin-top:14px}
+.err{color:var(--err);font-size:.9rem;min-height:1.2em;margin-top:6px}
+.result-main{text-align:center;padding:8px 0 4px}
+.result-main .label{color:var(--muted);font-size:.9rem}
+.result-main .big{font-size:1.8rem;font-weight:700;color:var(--accent)}
+table{width:100%;border-collapse:collapse;font-size:.92rem;margin-top:8px}
+td{padding:8px 4px;border-bottom:1px solid var(--line)}
+td.r{text-align:right;white-space:nowrap}
+tr.total td{font-weight:700;border-top:2px solid var(--line)}
+.note{font-size:.82rem;color:var(--muted);margin-top:12px}
+.hidden{display:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>연봉·퇴직금 계산기</h1>
+  <p class="desc">세금과 보험료를 반영한 실수령액과 퇴직금을 계산합니다. <strong>기준 연도: 2026년</strong></p>
+
+  <div class="tabs">
+    <button class="tab active" id="tabSalary" type="button">연봉 실수령액</button>
+    <button class="tab" id="tabRetire" type="button">퇴직금</button>
+    <button class="tab" id="tabLoan" type="button">대출 이자</button>
+  </div>
+
+  <!-- ===== 연봉 실수령액 ===== -->
+  <div id="panelSalary">
+    <div class="card">
+      <label for="annual">연봉 (만 원)</label>
+      <input id="annual" type="number" inputmode="numeric" value="4000" min="0" step="1">
+
+      <label for="meal">식대 등 비과세 금액 (월, 만 원)</label>
+      <input id="meal" type="number" inputmode="numeric" value="20" min="0" step="1">
+
+      <label for="dep">부양가족 수 (본인 제외)</label>
+      <input id="dep" type="number" inputmode="numeric" value="0" min="0" step="1">
+
+      <label for="child">8세 이상 20세 이하 자녀 수</label>
+      <input id="child" type="number" inputmode="numeric" value="0" min="0" step="1">
+
+      <div class="err" id="err"></div>
+      <button class="calc" id="calcBtn" type="button">계산하기</button>
+    </div>
+
+    <div class="card">
+      <div class="result-main">
+        <div class="label">월 실수령액</div>
+        <div class="big" id="netMonthly">-</div>
+        <div class="label" id="netYearly"></div>
+      </div>
+      <table><tbody id="breakdown"></tbody></table>
+    </div>
+  </div>
+
+  <!-- ===== 퇴직금 ===== -->
+  <div id="panelRetire" class="hidden">
+    <div class="card">
+      <label for="joinDate">입사일</label>
+      <input id="joinDate" type="date">
+
+      <label for="leaveDate">퇴사일</label>
+      <input id="leaveDate" type="date">
+
+      <label for="monthlyPay">퇴사 전 월 급여 (세전, 비과세 제외, 만 원)</label>
+      <input id="monthlyPay" type="number" inputmode="numeric" value="400" min="0" step="1">
+
+      <label for="bonusAnnual">연간 상여금 (세전, 만 원, 없으면 0)</label>
+      <input id="bonusAnnual" type="number" inputmode="numeric" value="0" min="0" step="1">
+
+      <label for="leaveAllowance">퇴사 전 3개월 내 연차수당 (만 원, 없으면 0)</label>
+      <input id="leaveAllowance" type="number" inputmode="numeric" value="0" min="0" step="1">
+
+      <div class="err" id="errRetire"></div>
+      <button class="calc" id="retireBtn" type="button">계산하기</button>
+    </div>
+
+    <div class="card">
+      <div class="result-main">
+        <div class="label">퇴직금 실수령액 (세후)</div>
+        <div class="big" id="retireNet">-</div>
+        <div class="label" id="retireGross"></div>
+      </div>
+      <table><tbody id="retireBreakdown"></tbody></table>
+    </div>
+  </div>
+
+  <!-- ===== 대출 이자 ===== -->
+  <div id="panelLoan" class="hidden">
+    <div class="card">
+      <label for="loanAmt">대출 원금 (만 원)</label>
+      <input id="loanAmt" type="number" inputmode="numeric" value="30000" min="0" step="1">
+
+      <label for="loanRate">연 금리 (%)</label>
+      <input id="loanRate" type="number" inputmode="decimal" value="4.5" min="0" step="0.01">
+
+      <label for="loanMonths">대출 기간 (개월)</label>
+      <input id="loanMonths" type="number" inputmode="numeric" value="360" min="1" step="1">
+
+      <label for="loanMethod">상환 방식</label>
+      <select id="loanMethod">
+        <option value="equal">원리금균등상환</option>
+        <option value="principal">원금균등상환</option>
+        <option value="bullet">만기일시상환</option>
+      </select>
+
+      <div class="err" id="errLoan"></div>
+      <button class="calc" id="loanBtn" type="button">계산하기</button>
+    </div>
+
+    <div class="card">
+      <div class="result-main">
+        <div class="label" id="loanFirstLabel">첫 달 납입액</div>
+        <div class="big" id="loanFirst">-</div>
+        <div class="label" id="loanTotal"></div>
+      </div>
+      <table><tbody id="loanSummary"></tbody></table>
+      <p class="label" style="margin:16px 0 4px;font-size:.9rem">연도별 상환 내역</p>
+      <table>
+        <thead><tr><td>연차</td><td class="r">납입 원금</td><td class="r">납입 이자</td><td class="r">잔액</td></tr></thead>
+        <tbody id="loanYearly"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <p class="note">
+    ※ 이 계산기는 참고용입니다. 실제 지급액은 회사 규정, 평균임금 산정 범위, 중간정산 여부 등에 따라 달라질 수 있습니다.<br>
+    ※ 4대보험료 요율, 소득세율, 퇴직소득 공제 기준은 2026년 기준으로 설정했습니다. 매년 바뀔 수 있으니 사용 전에 공단과 국세청 공지를 확인하세요.<br>
+    ※ 월 세금은 연간 세액을 12로 나눈 값이며, 실제 원천징수액과 차이가 날 수 있습니다.<br>
+    ※ 퇴직금은 1년 이상 근속한 경우에 지급 대상입니다. 퇴직소득세는 근속연수 공제와 환산급여 공제를 적용한 간이 계산입니다.
+  </p>
+</div>
+
+<script>
+// ===== 기준값 (매년 확인 후 수정) =====
+var RATES = {
+  pensionRate: 0.045,          // 국민연금 근로자 부담률 (9%의 절반)
+  pensionMin: 400000,          // 국민연금 기준소득월액 하한 (원)
+  pensionMax: 6370000,         // 국민연금 기준소득월액 상한 (원)
+  healthRate: 0.03595,         // 건강보험 근로자 부담률 (7.19%의 절반)
+  ltcRateOfHealth: 0.1314,     // 장기요양보험료 = 건강보험료 × 13.14%
+  employRate: 0.009,           // 고용보험 근로자 부담률
+  personalDeduction: 1500000,  // 인적공제 1인당 (원)
+  localTaxRate: 0.1            // 지방소득세 = 소득세의 10%
+};
+
+// 종합소득세율표 [과세표준 상한, 세율, 누진공제]
+var TAX_BRACKETS = [
+  [14000000, 0.06, 0],
+  [50000000, 0.15, 1260000],
+  [88000000, 0.24, 5760000],
+  [150000000, 0.35, 15440000],
+  [300000000, 0.38, 19940000],
+  [500000000, 0.40, 25940000],
+  [1000000000, 0.42, 35940000],
+  [Infinity, 0.45, 65940000]
+];
+
+// ===== 공통 함수 =====
+function floor10(x) { return Math.floor(x / 10) * 10; }
+
+function taxOnBase(base) {
+  if (base <= 0) return 0;
+  for (var i = 0; i < TAX_BRACKETS.length; i++) {
+    if (base <= TAX_BRACKETS[i][0]) {
+      return base * TAX_BRACKETS[i][1] - TAX_BRACKETS[i][2];
+    }
+  }
+  return 0;
+}
+
+// ===== 연봉 실수령액 계산 =====
+function laborIncomeDeduction(g) {
+  var d;
+  if (g <= 5000000) d = g * 0.7;
+  else if (g <= 15000000) d = 3500000 + (g - 5000000) * 0.4;
+  else if (g <= 45000000) d = 7500000 + (g - 15000000) * 0.15;
+  else if (g <= 100000000) d = 12000000 + (g - 45000000) * 0.05;
+  else d = 14750000 + (g - 100000000) * 0.02;
+  return Math.min(d, 20000000);
+}
+
+function laborTaxCredit(calcTax, g) {
+  var c = calcTax <= 1300000 ? calcTax * 0.55 : 715000 + (calcTax - 1300000) * 0.30;
+  var limit;
+  if (g <= 33000000) limit = 740000;
+  else if (g <= 70000000) limit = Math.max(660000, 740000 - (g - 33000000) * 0.008);
+  else limit = Math.max(500000, 660000 - (g - 70000000) * 0.5);
+  return Math.min(c, limit);
+}
+
+function childCredit(n) {
+  if (n <= 0) return 0;
+  if (n === 1) return 150000;
+  if (n === 2) return 350000;
+  return 350000 + (n - 2) * 300000;
+}
+
+function calculate(annualMan, mealMan, dep, child) {
+  var annual = annualMan * 10000;
+  var mealMonthly = mealMan * 10000;
+  var gross = Math.max(0, annual - mealMonthly * 12);
+
+  var baseMonthly = Math.max(0, annual / 12 - mealMonthly);
+  var pensionBase = Math.min(Math.max(baseMonthly, RATES.pensionMin), RATES.pensionMax);
+
+  var pensionM = floor10(pensionBase * RATES.pensionRate);
+  var healthM = floor10(baseMonthly * RATES.healthRate);
+  var ltcM = floor10(healthM * RATES.ltcRateOfHealth);
+  var employM = floor10(baseMonthly * RATES.employRate);
+
+  var incomeAmount = gross - laborIncomeDeduction(gross);
+  var personal = RATES.personalDeduction * (1 + dep);
+  var insuranceAnnual = (healthM + ltcM + employM) * 12;
+  var pensionAnnual = pensionM * 12;
+  var taxBase = Math.max(0, incomeAmount - personal - pensionAnnual - insuranceAnnual);
+  var calcTax = floor10(taxOnBase(taxBase));
+  var credit = laborTaxCredit(calcTax, gross);
+  var kidCredit = childCredit(child);
+  var determinedTax = Math.max(0, calcTax - credit - kidCredit);
+  var localTaxAnnual = floor10(determinedTax * RATES.localTaxRate);
+
+  var incomeTaxM = floor10(determinedTax / 12);
+  var localTaxM = floor10(localTaxAnnual / 12);
+
+  var totalDeductM = pensionM + healthM + ltcM + employM + incomeTaxM + localTaxM;
+  var netM = annual / 12 - totalDeductM;
+
+  return {
+    grossMonthly: annual / 12,
+    pension: pensionM,
+    health: healthM,
+    ltc: ltcM,
+    employ: employM,
+    incomeTax: incomeTaxM,
+    localTax: localTaxM,
+    totalDeduct: totalDeductM,
+    netMonthly: netM,
+    netYearly: netM * 12
+  };
+}
+
+// ===== 퇴직금 계산 =====
+// 퇴직금 = 1일 평균임금 × 30 × (재직일수 ÷ 365)
+// 평균임금 = 퇴사 직전 3개월 임금 총액 ÷ 그 기간 일수
+function retirementCalc(joinStr, leaveStr, monthlyMan, bonusMan, allowanceMan) {
+  var join = new Date(joinStr + 'T00:00:00');
+  var leave = new Date(leaveStr + 'T00:00:00');
+  var DAY = 86400000;
+  var days = Math.round((leave - join) / DAY);
+
+  var start3m = new Date(leave.getTime());
+  start3m.setMonth(start3m.getMonth() - 3);
+  var threeMonthDays = Math.round((leave - start3m) / DAY);
+
+  var wages3m = monthlyMan * 10000 * 3 + bonusMan * 10000 * 3 / 12 + allowanceMan * 10000;
+  var avgDaily = threeMonthDays > 0 ? wages3m / threeMonthDays : 0;
+  var severance = floor10(avgDaily * 30 * days / 365);
+
+  // 퇴직소득세 (간이 계산)
+  var years = Math.max(1, Math.ceil(days / 365));
+  var yearsDeduction;
+  if (years <= 5) yearsDeduction = 300000 * years;
+  else if (years <= 10) yearsDeduction = 1500000 + 500000 * (years - 5);
+  else if (years <= 20) yearsDeduction = 4000000 + 800000 * (years - 10);
+  else yearsDeduction = 12000000 + 1200000 * (years - 20);
+
+  var converted = Math.max(0, (severance - yearsDeduction) * 12 / years);
+  var convDeduction;
+  if (converted <= 8000000) convDeduction = converted;
+  else if (converted <= 70000000) convDeduction = 8000000 + (converted - 8000000) * 0.6;
+  else if (converted <= 100000000) convDeduction = 45200000 + (converted - 70000000) * 0.55;
+  else if (converted <= 300000000) convDeduction = 61700000 + (converted - 100000000) * 0.45;
+  else convDeduction = 151700000 + (converted - 300000000) * 0.35;
+
+  var taxBase = Math.max(0, converted - convDeduction) * years / 12;
+  var calcTax = taxOnBase(taxBase) * years / 12;
+  var incomeTax = floor10(calcTax);
+  var localTax = floor10(incomeTax * RATES.localTaxRate);
+  var totalTax = incomeTax + localTax;
+
+  return {
+    days: days,
+    years: years,
+    avgDaily: avgDaily,
+    severance: severance,
+    incomeTax: incomeTax,
+    localTax: localTax,
+    net: severance - totalTax
+  };
+}
+
+// ===== 대출 이자 계산 =====
+// 상환 일정 생성 (금액 단위: 원, 금리: 연 %)
+function loanSchedule(P, annualRate, n, method) {
+  var r = annualRate / 100 / 12;
+  var rows = [];
+  var balance = P;
+  var equalPay = 0;
+  if (method === 'equal') {
+    equalPay = r === 0 ? P / n : P * r * Math.pow(1 + r, n) / (Math.pow(1 + r, n) - 1);
+  }
+  var fixedPrincipal = P / n;
+  for (var m = 1; m <= n; m++) {
+    var interest = Math.round(balance * r);
+    var principal;
+    if (method === 'equal') principal = Math.round(equalPay) - interest;
+    else if (method === 'principal') principal = Math.round(fixedPrincipal);
+    else principal = 0; // 만기일시
+    if (m === n) principal = balance; // 마지막 달에 잔액 정리
+    balance -= principal;
+    rows.push({
+      month: m,
+      payment: principal + interest,
+      principal: principal,
+      interest: interest,
+      balance: Math.max(0, balance)
+    });
+  }
+  return rows;
+}
+
+var METHOD_LABEL = { equal: '원리금균등상환', principal: '원금균등상환', bullet: '만기일시상환' };
+
+function renderLoan() {
+  var P = readNum('loanAmt');
+  var rate = readNum('loanRate');
+  var n = readNum('loanMonths');
+  var method = document.getElementById('loanMethod').value;
+  var err = document.getElementById('errLoan');
+
+  if (P === null || rate === null || n === null || P <= 0 || n < 1 || n > 600) {
+    err.textContent = '대출 원금은 0보다 커야 하고, 기간은 1~600개월 사이로 입력해 주세요.';
+    return;
+  }
+  err.textContent = '';
+  n = Math.floor(n);
+
+  var pWon = P * 10000;
+  var rows = loanSchedule(pWon, rate, n, method);
+  var totalPay = 0, totalInt = 0;
+  rows.forEach(function (x) { totalPay += x.payment; totalInt += x.interest; });
+
+  document.getElementById('loanFirstLabel').textContent =
+    method === 'equal' ? '매월 납입액 (원리금 균등)' : '첫 달 납입액';
+  document.getElementById('loanFirst').textContent = fmt(rows[0].payment);
+  document.getElementById('loanTotal').textContent =
+    '총 상환액 ' + fmt(totalPay) + ' (이자 ' + fmt(totalInt) + ')';
+
+  var summary = [
+    ['대출 원금', fmt(pWon)],
+    ['상환 방식', METHOD_LABEL[method]],
+    ['대출 기간', n + '개월' + (n % 12 === 0 ? ' (' + (n / 12) + '년)' : '')],
+    ['마지막 달 납입액', fmt(rows[rows.length - 1].payment)],
+    ['총 이자', fmt(totalInt)],
+    ['총 상환액', fmt(totalPay)]
+  ];
+  var html = '';
+  summary.forEach(function (row) {
+    html += '<tr><td>' + row[0] + '</td><td class="r">' + row[1] + '</td></tr>';
+  });
+  document.getElementById('loanSummary').innerHTML = html;
+
+  // 연도별 집계
+  var years = [];
+  rows.forEach(function (x) {
+    var idx = Math.floor((x.month - 1) / 12);
+    if (!years[idx]) years[idx] = { p: 0, i: 0, bal: 0 };
+    years[idx].p += x.principal;
+    years[idx].i += x.interest;
+    years[idx].bal = x.balance;
+  });
+  var yHtml = '';
+  years.forEach(function (y, idx) {
+    yHtml += '<tr><td>' + (idx + 1) + '년차</td><td class="r">' + fmt(y.p) +
+      '</td><td class="r">' + fmt(y.i) + '</td><td class="r">' + fmt(y.bal) + '</td></tr>';
+  });
+  document.getElementById('loanYearly').innerHTML = yHtml;
+}
+
+// ===== 화면 연결 =====
+var fmt = function (n) { return Math.round(n).toLocaleString('ko-KR') + '원'; };
+
+function readNum(id) {
+  var v = document.getElementById(id).value;
+  var n = Number(v);
+  if (v === '' || isNaN(n) || n < 0) return null;
+  return n;
+}
+
+function renderSalary() {
+  var annual = readNum('annual');
+  var meal = readNum('meal');
+  var dep = readNum('dep');
+  var child = readNum('child');
+  var err = document.getElementById('err');
+
+  if (annual === null || meal === null || dep === null || child === null) {
+    err.textContent = '입력값을 확인해 주세요. 음수나 빈칸은 계산할 수 없습니다.';
+    return;
+  }
+  if (meal * 12 > annual) {
+    err.textContent = '비과세 식대가 연봉보다 클 수 없습니다.';
+    return;
+  }
+  err.textContent = '';
+
+  var r = calculate(annual, meal, Math.floor(dep), Math.floor(child));
+  document.getElementById('netMonthly').textContent = fmt(r.netMonthly);
+  document.getElementById('netYearly').textContent = '연간 실수령액 약 ' + fmt(r.netYearly);
+
+  var rows = [
+    ['월 급여(연봉 ÷ 12)', r.grossMonthly],
+    ['국민연금', -r.pension],
+    ['건강보험', -r.health],
+    ['장기요양보험', -r.ltc],
+    ['고용보험', -r.employ],
+    ['소득세', -r.incomeTax],
+    ['지방소득세', -r.localTax]
+  ];
+  var html = '';
+  rows.forEach(function (row) {
+    html += '<tr><td>' + row[0] + '</td><td class="r">' + (row[1] < 0 ? '-' : '') + fmt(Math.abs(row[1])) + '</td></tr>';
+  });
+  html += '<tr class="total"><td>실수령액</td><td class="r">' + fmt(r.netMonthly) + '</td></tr>';
+  document.getElementById('breakdown').innerHTML = html;
+}
+
+function renderRetire() {
+  var joinStr = document.getElementById('joinDate').value;
+  var leaveStr = document.getElementById('leaveDate').value;
+  var monthly = readNum('monthlyPay');
+  var bonus = readNum('bonusAnnual');
+  var allowance = readNum('leaveAllowance');
+  var err = document.getElementById('errRetire');
+
+  if (!joinStr || !leaveStr) {
+    err.textContent = '입사일과 퇴사일을 입력해 주세요.';
+    return;
+  }
+  if (monthly === null || bonus === null || allowance === null) {
+    err.textContent = '금액 입력값을 확인해 주세요. 음수나 빈칸은 계산할 수 없습니다.';
+    return;
+  }
+  var days = Math.round((new Date(leaveStr + 'T00:00:00') - new Date(joinStr + 'T00:00:00')) / 86400000);
+  if (days <= 0) {
+    err.textContent = '퇴사일은 입사일보다 뒤여야 합니다.';
+    return;
+  }
+  err.textContent = days < 365 ? '1년 미만 재직자는 퇴직금이 발생하지 않습니다. 참고용으로 계산합니다.' : '';
+
+  var r = retirementCalc(joinStr, leaveStr, monthly, bonus, allowance);
+  document.getElementById('retireNet').textContent = fmt(r.net);
+  document.getElementById('retireGross').textContent = '세전 퇴직금 ' + fmt(r.severance);
+
+  var rows = [
+    ['재직일수', r.days + '일 (약 ' + r.years + '년차)'],
+    ['1일 평균임금', fmt(r.avgDaily)],
+    ['세전 퇴직금', fmt(r.severance)],
+    ['퇴직소득세', '-' + fmt(r.incomeTax)],
+    ['지방소득세', '-' + fmt(r.localTax)]
+  ];
+  var html = '';
+  rows.forEach(function (row) {
+    html += '<tr><td>' + row[0] + '</td><td class="r">' + row[1] + '</td></tr>';
+  });
+  html += '<tr class="total"><td>퇴직금 실수령액</td><td class="r">' + fmt(r.net) + '</td></tr>';
+  document.getElementById('retireBreakdown').innerHTML = html;
+}
+
+// 탭 전환
+var PANELS = { salary: 'panelSalary', retire: 'panelRetire', loan: 'panelLoan' };
+function showTab(which) {
+  Object.keys(PANELS).forEach(function (key) {
+    var on = key === which;
+    document.getElementById(PANELS[key]).classList.toggle('hidden', !on);
+    document.getElementById('tab' + key.charAt(0).toUpperCase() + key.slice(1)).classList.toggle('active', on);
+  });
+}
+
+document.getElementById('tabSalary').addEventListener('click', function () { showTab('salary'); });
+document.getElementById('tabRetire').addEventListener('click', function () { showTab('retire'); });
+document.getElementById('tabLoan').addEventListener('click', function () { showTab('loan'); });
+
+document.getElementById('calcBtn').addEventListener('click', renderSalary);
+document.getElementById('retireBtn').addEventListener('click', renderRetire);
+document.getElementById('loanBtn').addEventListener('click', renderLoan);
+['annual', 'meal', 'dep', 'child'].forEach(function (id) {
+  document.getElementById(id).addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') renderSalary();
+  });
+});
+['monthlyPay', 'bonusAnnual', 'leaveAllowance'].forEach(function (id) {
+  document.getElementById(id).addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') renderRetire();
+  });
+});
+
+renderSalary();
+</script>
+</body>
+</html>
